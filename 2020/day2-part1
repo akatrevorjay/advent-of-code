@@ -31,8 +31,9 @@ for line in raw_lines:
     if not m:
         raise ValueError('could not parse line=%r' % line)
 
-    log.debug('parsed: %r', m.groups())
-    cmin, cmax, char, pw = m.groups()
+    grps = m.groups()
+    log.debug('parsed: %r', grps)
+    cmin, cmax, char, pw = grps
     cmin, cmax = [int(x) for x in [cmin, cmax]]
 
     num_pws += 1
