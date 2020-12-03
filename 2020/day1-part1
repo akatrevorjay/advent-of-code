@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+
+import functools
+import logging
+from pprint import pprint as pp
+
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+fn = './day1.input'
+
+log.info('reading fn=%s', fn)
+with open(fn) as fh:
+    raw_lines = fh.readlines()
+
+amounts = []
+for line in raw_lines:
+    log.debug('line=%r', line)
+    line = line.strip().rstrip('\n').rstrip()
+    if not line:
+        continue
+    amt = int(line)
+    amounts.append(amt)
+
+log.info('read len(amounts)=%d', len(amounts))
+# pp(amounts)
+
+for iidx, i in enumerate(amounts):
+    for jidx, j in enumerate(amounts):
+        if jidx in [iidx]:
+            continue
+
+        idxs = [iidx, jidx]
+        amts = [i, j]
+        idx_to_amts = dict(zip(idxs, amts))
+
+        if sum(amts) == 2020:
+            answer = functools.reduce(lambda x, y: x*y, amts)
+            log.info('answer(i*j)=%d amts=%r idx_to_amts=%r', answer, amts, idx_to_amts)
+            print(answer)
