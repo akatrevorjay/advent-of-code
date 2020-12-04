@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+
+import collections
+import functools
+import logging
+import os
+import re
+import sys
+from pprint import pprint as pp
+
+import numpy as np
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+challenge_name = os.path.basename(sys.argv[0])
+challenge_shortname = challenge_name.split('-')[0]
+log.info('challenge: %s short=%s', challenge_name, challenge_shortname)
+
+fn = './%s.input' % challenge_shortname
+
+log.info('reading fn=%s', fn)
+with open(fn) as fh:
+    raw_lines = fh.readlines()
+
+raw_passports = []
+passports = []
+cur_lines = []
+
+
+def found_one():
+    cur_single = ' '.join(cur_lines)
+    if not cur_single:
+        return
+
+    raw_passports.append(cur_single)
+
+    cur = re.findall(r'\b(\w+):([^\s]+)\b', cur_single)
+    passports.append(dict(cur))
+
+    cur_lines.clear()
+
+
+for line in raw_lines:
+    log.debug('line=%r', line)
+    line = line.strip().rstrip('\n').rstrip()
+
+    if not line:
+        found_one()
+
+    cur_lines.append(line)
+
+found_one()
+
+log.info(f'len(passports)={len(passports)}')
+
+fields = {
+    'byr': 'Birth Year',
+    'iyr': 'Issue Year',
+    'eyr': 'Expiration Year',
+    'hgt': 'Height',
+    'hcl': 'Hair Color',
+    'ecl': 'Eye Color',
+    'pid': 'Passport ID',
+    # 'cid': 'Country ID',
+}
+
+
+def hgt_validator(x):
+    m = re.match(r'^(\d+)(cm|in)', x)
+    if not m:
+        return False
+    num, unit = m.groups()
+    num = int(num)
+    if unit == 'cm':
+        ret = num >= 150 and num <= 193
+    elif unit == 'in':
+        ret = num >= 59 and num <= 76
+    log.debug('[x=%r] ret=%r', x, ret)
+    return ret
+
+
+validators = {
+    'byr': lambda x: int(x) >= 1920 and int(x) <= 2002,
+    'iyr': lambda x: int(x) >= 2010 and int(x) <= 2020,
+    'eyr': lambda x: int(x) >= 2020 and int(x) <= 2030,
+    'hgt': hgt_validator,
+    'hcl': lambda x: re.match(r'^#([0-9a-f]{6})$', x),
+    'ecl': lambda x: x in 'amb blu brn gry grn hzl oth'.split(),
+    'pid': lambda x: re.match(r'^\d{9}$', x),
+}
+
+valid = 0
+
+for pport in passports:
+    log.info('pport=%r', pport)
+
+    missing_fields = set(fields) - set(pport)
+    if not missing_fields:
+        cur = True
+        for k, v in validators.items():
+            if not v(pport[k]):
+                log.error(f'invalid: {k}={pport[k]}')
+                cur = False
+
+        if cur:
+            log.info('valid')
+            valid += 1
+    else:
+        log.info('missing_fields=%r', missing_fields)
+
+log.info('valid=%r', valid)
