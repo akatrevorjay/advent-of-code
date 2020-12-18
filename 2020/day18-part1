@@ -154,3 +154,6 @@ for lidx, l in enumerate(lines):
     log.info('ret=%r', ret)
 
 log.info('rets=%r', rets)
+
+fin = sum(rets)
+log.info('fin=%r', fin)

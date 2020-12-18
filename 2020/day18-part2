@@ -65,7 +65,7 @@ def parse(lines: T.List[str]):
     multop = pyp.oneOf("* /")
     plusop = pyp.oneOf("+ -")
     # factop = pyp.Literal("!")
-    # allop = pyp.oneOf("+ - * /")
+    allop = pyp.oneOf("+ - * /")
 
     # To use the infixNotation helper:
     #   1.  Define the "atom" operand term of the grammar.
@@ -154,3 +154,6 @@ for lidx, l in enumerate(lines):
     log.info('ret=%r', ret)
 
 log.info('rets=%r', rets)
+
+fin = sum(rets)
+log.info('fin=%r', fin)
