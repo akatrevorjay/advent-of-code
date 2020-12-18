@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+
+import collections
+import functools
+import logging
+import operator
+import os
+import random
+import re
+import string
+import sys
+import typing as T
+from pprint import pprint as pp
+
+import ipdb
+import IPython
+import numpy as np
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+challenge_name = os.path.basename(sys.argv[0])
+challenge_shortname = challenge_name.split('-')[0]
+log.info('challenge: %s short=%s', challenge_name, challenge_shortname)
+
+
+def slurp(fn: str):
+    log.info('reading fn=%s', fn)
+    with open(fn) as fh:
+        raw_lines = fh.readlines()
+
+    lines = []
+    for line in raw_lines:
+        log.debug('line=%r', line)
+        line = line.strip().rstrip('\n').rstrip()
+
+        if not line:
+            continue
+        lines.append(line)
+
+    return lines
+
+
+fn = './%s.input' % challenge_shortname
+lines = slurp(fn)
+
+
+def parse(lines: T.List[str]):
+    # based on pyparsing.examples.simpleArith
+    import pyparsing as pyp
+
+    ppc = pyp.pyparsing_common
+
+    pyp.ParserElement.enablePackrat()
+    sys.setrecursionlimit(3000)
+
+    integer = ppc.integer
+    variable = pyp.Word(pyp.alphas, exact=1)
+    operand = integer | variable
+
+    expop = pyp.Literal("^")
+    signop = pyp.oneOf("+ -")
+    multop = pyp.oneOf("* /")
+    plusop = pyp.oneOf("+ -")
+    # factop = pyp.Literal("!")
+    # allop = pyp.oneOf("+ - * /")
+
+    # To use the infixNotation helper:
+    #   1.  Define the "atom" operand term of the grammar.
+    #       For this simple grammar, the smallest operand is either
+    #       and integer or a variable.  This will be the first argument
+    #       to the infixNotation method.
+    #   2.  Define a list of tuples for each level of operator
+    #       precendence.  Each tuple is of the form
+    #       (opExpr, numTerms, rightLeftAssoc, parseAction), where
+    #       - opExpr is the pyparsing expression for the operator;
+    #          may also be a string, which will be converted to a Literal
+    #       - numTerms is the number of terms for this operator (must
+    #          be 1 or 2)
+    #       - rightLeftAssoc is the indicator whether the operator is
+    #          right or left associative, using the pyparsing-defined
+    #          constants opAssoc.RIGHT and opAssoc.LEFT.
+    #       - parseAction is the parse action to be associated with
+    #          expressions matching this operator expression (the
+    #          parse action tuple member may be omitted)
+    #   3.  Call infixNotation passing the operand expression and
+    #       the operator precedence list, and save the returned value
+    #       as the generated pyparsing expression.  You can then use
+    #       this expression to parse input strings, or incorporate it
+    #       into a larger, more complex grammar.
+    #
+    expr = pyp.infixNotation(
+        operand,
+        [
+            ("!", 1, pyp.opAssoc.LEFT),
+            ("^", 2, pyp.opAssoc.RIGHT),
+            (signop, 1, pyp.opAssoc.RIGHT),
+            # (allop, 2, pyp.opAssoc.LEFT),
+            (plusop, 2, pyp.opAssoc.LEFT),
+            (multop, 2, pyp.opAssoc.LEFT),
+        ],
+    )
+
+    parsed = [expr.parseString(l).asList() for l in lines]
+    return parsed
+
+
+parsed = parse(lines)
+
+operators = {'-': operator.sub, '+': operator.add, '*': operator.mul, '/': operator.truediv}
+
+
+def compute_bare(maths: str, depth: int = 0):
+    log.debug('[depth=%r] computing maths=%r', depth, maths)
+
+    res = 0
+    sides = []
+    op = '+'
+    for item in maths:
+        if isinstance(item, list):
+            item = compute_bare(item, depth=depth + 1)
+
+        if item in operators:
+            log.debug('[depth=%r] op=%r', depth, item)
+            op = item
+        else:
+            log.debug('[depth=%r] side[]=%r', depth, item)
+            sides.append(item)
+
+            log.debug('[depth=%r] evaluating op=%r sides=%r', depth, op, sides)
+            op_meth = operators[op]
+
+            prev_res = res
+            res = op_meth(res, *sides)
+            log.debug('[depth=%r] res=%d prev=%d', depth, res, prev_res)
+
+            sides.clear()
+            op = None
+
+    log.debug('[depth=%r] maths=%r res=%r', depth, maths, res)
+    return res
+
+
+rets = []
+for lidx, l in enumerate(lines):
+    p = parsed[lidx]
+
+    log.warning('line=%r', l)
+    log.warning('parsed=%r', l)
+    ret = compute_bare(p)
+    rets.append(ret)
+    log.info('ret=%r', ret)
+
+log.info('rets=%r', rets)
