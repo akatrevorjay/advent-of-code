@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+
+import collections
+import functools
+import logging
+import operator
+import os
+import random
+import re
+import string
+import sys
+import typing as T
+from dataclasses import dataclass, field
+from pprint import pprint as pp
+
+import ipdb
+import numpy as np
+
+import attr
+import IPython
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+challenge_name = os.path.basename(sys.argv[0])
+challenge_shortname = challenge_name.split('-')[0]
+log.info('challenge: %s short=%s', challenge_name, challenge_shortname)
+
+
+def slurp(fn: str):
+    log.info('reading fn=%s', fn)
+    with open(fn) as fh:
+        raw_lines = fh.readlines()
+
+    lines = []
+    for line in raw_lines:
+        log.debug('line=%r', line)
+        line = line.strip().rstrip('\n').rstrip()
+
+        if not line or line.startswith('#'):
+            continue
+        lines.append(line)
+
+    return lines
+
+
+suffix = ''
+# suffix = '-test'
+
+fn = './%s.input%s' % (challenge_shortname, suffix)
+lines = slurp(fn)
+# answers_fn = './%s.answers%s' % (challenge_shortname, suffix)
+# answers = slurp(answers_fn)
+
+
+@dataclass
+class Player:
+    pid: int
+    # cards: T.List[int] = field(default_factory=list)
+    cards: T.Deque[int] = field(default_factory=collections.deque)
+
+    def calc_score(self) -> int:
+        cards = [self.cards[cid]*mult for cid, mult in enumerate(range(len(self.cards), 1 - 1, -1))]
+        return sum(cards)
+
+
+num_players = 2
+players = [Player(pid=pid) for pid in range(num_players)]
+
+cur_player = None
+for line in lines:
+    if m_player := re.findall(r'^Player (\d+):$', line):
+        pid = int(m_player[0]) - 1
+        cur_player = players[pid]
+
+    elif cur_player:
+        cur_player.cards.append(int(line))
+
+pp(players)
+
+round_no = 0
+
+
+def status():
+    # pp(players)
+    [print(f"Player {p.pid}'s deck: {' '.join([str(c) for c in p.cards])}") for p in players]
+
+
+@dataclass
+class Game:
+    gid: int
+    decks: T.List[T.Deque[int]]
+
+    seen: T.Set[T.Tuple[T.Tuple[int]]] = field(default_factory=set)
+
+    round_no: int = 0
+
+    def play_round(self):
+        print()
+        log.warning('-- Round %d (Game %d) --', self.round_no, self.gid)
+        status()
+
+        seen = tuple(tuple(d) for d in self.decks)
+
+        if False and seen in self.seen:
+            print(f'Saw decks before, auto win for player 0')
+            winner_pid = 0
+        else:
+            self.seen.add(seen)
+
+            cards = [d.popleft() for d in self.decks]
+            [print(f"Player {pid} plays: {cards[pid]}") for pid, d in enumerate(self.decks)]
+
+            if cards[0] > cards[1]:
+                winner_pid = 0
+            else:
+                winner_pid = 1
+
+        print(f'Player {winner_pid} wins the round of game {self.gid}!')
+
+        self.decks[winner_pid].extend(reversed(sorted(cards)))
+        self.round_no += 1
+        return winner_pid
+
+    def play(self):
+        while not self.is_game_over():
+            winner_pid = self.play_round()
+        return winner_pid, self.decks
+
+    def is_game_over(self):
+        counts = [not bool(p.cards) for p in players]
+        return any(counts)
+
+
+
+g = Game(gid=0, decks=[p.cards for p in players])
+winner_pid, decks = g.play()
+winner = players[winner_pid]
+
+print()
+print(winner)
+print(winner.calc_score())
+
