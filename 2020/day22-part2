@@ -83,44 +83,48 @@ pp(players)
 round_no = 0
 
 
-def status():
-    # pp(players)
-    [print(f"Player {p.pid}'s deck: {' '.join([str(c) for c in p.cards])}") for p in players]
-
-
 @dataclass
 class Game:
     gid: int
     decks: T.List[T.Deque[int]]
-
-    seen: T.Set[T.Tuple[T.Tuple[int]]] = field(default_factory=set)
+    seen: T.Set[T.Tuple[T.Tuple[int]]]
 
     round_no: int = 0
 
+    def status(self):
+        [print(f"Player {did}'s deck: {' '.join([str(c) for c in d])}") for did, d in enumerate(self.decks)]
+
     def play_round(self):
         print()
-        log.warning('-- Round %d (Game %d) --', self.round_no, self.gid)
-        status()
+        # log.warning('-- Round %d (Game %d) --', self.round_no, self.gid)
+        print('-- Round %d (Game %d) --' % (self.round_no, self.gid))
+        self.status()
 
-        seen = tuple(tuple(d) for d in self.decks)
+        seen_key = tuple(tuple(d) for d in self.decks)
+        cards = [d.popleft() for d in self.decks]
+        [print(f"Player {pid} plays: {cards[pid]}") for pid, d in enumerate(self.decks)]
 
-        if False and seen in self.seen:
+        if seen_key in self.seen:
             print(f'Saw decks before, auto win for player 0')
             winner_pid = 0
         else:
-            self.seen.add(seen)
+            self.seen.add(seen_key)
 
-            cards = [d.popleft() for d in self.decks]
-            [print(f"Player {pid} plays: {cards[pid]}") for pid, d in enumerate(self.decks)]
-
-            if cards[0] > cards[1]:
-                winner_pid = 0
+            has_enough_cards_for_recursive_combat = [cards[did] <= len(d) for did, d in enumerate(self.decks)]
+            if all(has_enough_cards_for_recursive_combat):
+                print(f'Playing sub-game to determine winner')
+                sub_decks = [collections.deque(list(d)[:cards[did]]) for did, d in enumerate(self.decks)]
+                sub_g = Game(gid=self.gid + 1, decks=sub_decks, seen=seen)
+                winner_pid, _ = sub_g.play()
             else:
-                winner_pid = 1
-
-        print(f'Player {winner_pid} wins the round of game {self.gid}!')
+                if cards[0] > cards[1]:
+                    winner_pid = 0
+                else:
+                    winner_pid = 1
 
         self.decks[winner_pid].extend(reversed(sorted(cards)))
+
+        print(f'Player {winner_pid} wins the round of game {self.gid}!')
         self.round_no += 1
         return winner_pid
 
@@ -130,16 +134,19 @@ class Game:
         return winner_pid, self.decks
 
     def is_game_over(self):
-        counts = [not bool(p.cards) for p in players]
+        counts = [not bool(d) for d in self.decks]
         return any(counts)
 
 
-
-g = Game(gid=0, decks=[p.cards for p in players])
+seen = set()
+g = Game(
+    gid=0,
+    decks=[p.cards for p in players],
+    seen=seen,
+)
 winner_pid, decks = g.play()
 winner = players[winner_pid]
 
 print()
 print(winner)
 print(winner.calc_score())
-
