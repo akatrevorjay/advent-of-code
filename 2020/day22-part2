@@ -48,6 +48,7 @@ def slurp(fn: str):
 
 suffix = ''
 # suffix = '-test'
+# suffix = '-test-recurse'
 
 fn = './%s.input%s' % (challenge_shortname, suffix)
 lines = slurp(fn)
@@ -89,10 +90,14 @@ def incr_gid():
     return gid
 
 
+class WinFirstPlayer(Exception):
+    pass
+
+
 @dataclass
 class Game:
     decks: T.List[T.Deque[int]]
-    seen: T.Set[T.Tuple[T.Tuple[int]]]
+    seen: T.Set[T.Tuple[T.Tuple[int]]] = field(default_factory=set)
 
     gid: int = field(default_factory=incr_gid)
     round_no: int = -1
@@ -106,35 +111,36 @@ class Game:
         print()
         # log.warning('-- Round %d (Game %d) --', self.round_no, self.gid)
         print(f'-- Round {self.round_no+1} (Game {self.gid+1}) --')
+        print(f'len(seen)={len(self.seen)}')
         self.status()
 
         seen_key = tuple(tuple(d) for d in self.decks)
+
+        if seen_key in self.seen:
+            print(f'Saw decks before, auto win for player {0+1}')
+            raise WinFirstPlayer()
+
         cards = [d.popleft() for d in self.decks]
         [print(f"Player {pid+1} plays: {cards[pid]}") for pid, d in enumerate(self.decks)]
+        self.seen.add(seen_key)
 
-        if False and seen_key in self.seen:
-            print(f'Saw decks before, auto win for player {0+1}')
-            winner_pid = 0
+        has_enough_cards_for_recursive_combat = [cards[did] <= len(d) for did, d in enumerate(self.decks)]
+        if all(has_enough_cards_for_recursive_combat):
+            print(f'Playing sub-game to determine winner')
+            sub_decks = [collections.deque(list(d)[:cards[did]]) for did, d in enumerate(self.decks)]
+            sub_g = Game(decks=sub_decks)
+            winner_pid, _ = sub_g.play()
+            print()
+            print(f'...anyway, back to game {self.gid+1}')
+
+            cards = [cards[winner_pid], cards[int(not winner_pid)]]
         else:
-            self.seen.add(seen_key)
-
-            has_enough_cards_for_recursive_combat = [cards[did] <= len(d) for did, d in enumerate(self.decks)]
-            if all(has_enough_cards_for_recursive_combat):
-                print(f'Playing sub-game to determine winner')
-                sub_decks = [collections.deque(list(d)[:cards[did]]) for did, d in enumerate(self.decks)]
-                sub_g = Game(decks=sub_decks, seen=seen)
-                winner_pid, _ = sub_g.play()
-                print()
-                print(f'...anyway, back to game {self.gid+1}')
-
-                cards = [cards[winner_pid], cards[int(not winner_pid)]]
+            if cards[0] > cards[1]:
+                winner_pid = 0
             else:
-                if cards[0] > cards[1]:
-                    winner_pid = 0
-                else:
-                    winner_pid = 1
+                winner_pid = 1
 
-                cards = reversed(sorted(cards))
+            cards = reversed(sorted(cards))
 
         self.decks[winner_pid].extend(cards)
 
@@ -145,8 +151,11 @@ class Game:
         print()
         print(f'== Game {self.gid+1} ==')
 
-        while not self.is_game_over():
-            winner_pid = self.play_round()
+        try:
+            while not self.is_game_over():
+                winner_pid = self.play_round()
+        except WinFirstPlayer as exc:
+            winner_pid = 0
 
         print(f'The winner of game {self.gid+1} is player {winner_pid}')
         return winner_pid, self.decks
@@ -156,10 +165,8 @@ class Game:
         return any(counts)
 
 
-seen = set()
 g = Game(
     decks=[p.cards for p in players],
-    seen=seen,
 )
 winner_pid, decks = g.play()
 
