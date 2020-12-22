@@ -81,9 +81,9 @@ for line in lines:
 
 pp(players)
 
-round_no = 0
-
 gid = -1
+
+
 def incr_gid():
     global gid
     gid += 1
@@ -165,9 +165,7 @@ class Game:
         return any(counts)
 
 
-g = Game(
-    decks=[p.cards for p in players],
-)
+g = Game(decks=[p.cards for p in players])
 winner_pid, decks = g.play()
 
 for did, d in enumerate(decks):
