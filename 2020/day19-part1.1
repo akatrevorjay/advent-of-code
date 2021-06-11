@@ -1,0 +1,184 @@
+#!/usr/bin/env python
+
+import collections
+import functools
+import logging
+import operator
+import os
+import random
+import re
+import string
+import sys
+import typing as T
+from dataclasses import dataclass
+from pprint import pprint as pp
+
+import ipdb
+import numpy as np
+
+import attr
+import IPython
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+challenge_name = os.path.basename(sys.argv[0])
+challenge_shortname = challenge_name.split('-')[0]
+log.info('challenge: %s short=%s', challenge_name, challenge_shortname)
+
+
+def slurp(fn: str):
+    log.info('reading fn=%s', fn)
+    with open(fn) as fh:
+        raw_lines = fh.readlines()
+
+    lines = []
+    for line in raw_lines:
+        log.debug('line=%r', line)
+        line = line.strip().rstrip('\n').rstrip()
+
+        if not line:
+            continue
+        lines.append(line)
+
+    return lines
+
+
+suffix = '-part2-test'
+# suffix = '-test'
+
+fn = './%s.input%s' % (challenge_shortname, suffix)
+answers_fn = './%s.answers%s' % (challenge_shortname, suffix)
+lines = slurp(fn)
+answers_lines = slurp(answers_fn)
+
+
+class RuleError(Exception):
+    pass
+
+
+class RuleFailed(RuleError):
+    pass
+
+
+@attr.s
+class IRule:
+    def __call__(self, msg: str, pos: int = 0):
+        raise NotImplementedError()
+
+
+@attr.s
+class SeqRule:
+    children = attr.ib(factory=list)
+
+    def __call__(self, msg: str, pos: int = 0):
+        for meth in self.children:
+            char = msg[pos]
+            log.debug('[%r] [msg=%r, pos=%d] %r(%r)', self, msg, pos, meth, char)
+            pos = meth(msg=msg, pos=pos)
+        return pos
+
+
+@attr.s
+class LiteralRule:
+    match = attr.ib()
+
+    def __call__(self, rules: list, msg: str, pos: int = 0):
+        for char in self.match:
+            if msg[pos] != char:
+                raise RuleFailed(f'{self} msg={msg} pos={pos} char={char}')
+
+            pos += 1
+
+        return pos
+
+
+@attr.s
+class LookupRule:
+    children = attr.ib(factory=list)
+
+    def __call__(self, rules: list, msg: str, pos: int = 0):
+        for rule_idx in self.children:
+            meth = rules[rule_idx]
+            char = msg[pos]
+            log.debug('[%r] [msg=%r, pos=%d] %r(%r)', self, msg, pos, meth, char)
+            pos = meth(rules=rules, msg=msg, pos=pos)
+        return pos
+
+
+@attr.s
+class OrRule:
+    children = attr.ib(factory=list)
+
+    def __call__(self, rules: list, msg: str, pos: int = 0):
+        ok = False
+
+        for meth in self.children:
+            char = msg[pos]
+            log.debug('[%r] [msg=%r, pos=%d] %r(%r)', self, msg, pos, meth, char)
+
+            try:
+                new_pos = meth(rules=rules, msg=msg, pos=pos)
+
+                log.debug('ok pos=%r', pos)
+                pos = new_pos
+                ok = True
+                break
+            except RuleError as exc:
+                log.debug('exc=%r', exc)
+
+        if not ok:
+            raise RuleFailed(f'{self} msg={msg} pos={pos}')
+
+        return pos
+
+
+rules = {}
+
+for lidx, l in enumerate(lines):
+    log.info('line=%r', l)
+    lhead, lrule = l.split(' ', 1)
+    lidx = int(lhead.split(':', 1)[0])
+
+    if literals := re.findall(r'^"(\w)"$', lrule):
+        r = LiteralRule(match=literals)
+    else:
+        ors = lrule.split(' | ')
+
+        children = []
+        for seq in ors:
+            seq = re.split(r'\s', seq)
+            seq = [int(x) for x in seq]
+
+            cr = LookupRule(children=seq)
+            children.append(cr)
+
+        r = OrRule(children=children)
+
+    rules[lidx] = r
+
+
+rule = rules[0]
+cnt = collections.Counter()
+success = 0
+good = []
+progress = []
+
+for answer in answers_lines:
+    log.info('answer=%r', answer)
+    try:
+        pos = rule(rules=rules, msg=answer)
+        if pos < len(answer):
+            raise RuleFailed(f'length pos={pos} < len(answer)={len(answer)}')
+
+        success += 1
+        good.append(answer)
+        progress.append(True)
+    except RuleError as exc:
+        log.exception('rule=%r with exc=%r', rule, exc)
+
+        progress.append(False)
+
+log.info('success=%d', success)

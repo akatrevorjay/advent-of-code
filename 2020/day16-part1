@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+
+import collections
+import functools
+import logging
+import os
+import re
+import sys
+from pprint import pprint as pp
+
+import numpy as np
+import pytutils.log
+
+pytutils.log.configure()
+
+log = logging.getLogger(__name__)
+
+challenge_name = os.path.basename(sys.argv[0])
+challenge_shortname = challenge_name.split('-')[0]
+log.info('challenge: %s short=%s', challenge_name, challenge_shortname)
+
+fn = './%s.input' % challenge_shortname
+# fn = './%s.input-test' % challenge_shortname
+
+log.info('reading fn=%s', fn)
+with open(fn) as fh:
+    raw_lines = fh.readlines()
+
+
+lines = []
+for line in raw_lines:
+    log.debug('line=%r', line)
+    line = line.strip().rstrip('\n').rstrip()
+
+    if not line:
+        continue
+    lines.append(line)
+
+
+all_tickets = [[int(y) for y in x.split(',')] for x in lines]
+my_ticket = all_tickets[0]
+tickets = all_tickets[1:]
+
+
+
+rules_part1 = {
+    'departure location': lambda x: x in range(42, 570+1) or x in range(579, 960+1),
+    'departure station': lambda x: x in range(45, 101+1) or x in range(118, 967+1),
+    'departure platform': lambda x: x in range(36, 374+1) or x in range(394, 958+1),
+    'departure track': lambda x: x in range(48, 212+1) or x in range(233, 950+1),
+    'departure date': lambda x: x in range(41, 481+1) or x in range(492, 953+1),
+    'departure time': lambda x: x in range(38, 266+1) or x in range(274, 955+1),
+    'arrival location': lambda x: x in range(32, 560+1) or x in range(567, 951+1),
+    'arrival station': lambda x: x in range(44, 738+1) or x in range(762, 970+1),
+    'arrival platform': lambda x: x in range(40, 675+1) or x in range(685, 949+1),
+    'arrival track': lambda x: x in range(25, 320+1) or x in range(344, 954+1),
+    'class': lambda x: x in range(32, 806+1) or x in range(815, 959+1),
+    'duration': lambda x: x in range(38, 121+1) or x in range(129, 958+1),
+    'price': lambda x: x in range(35, 692+1) or x in range(706, 957+1),
+    'route': lambda x: x in range(36, 890+1) or x in range(901, 951+1),
+    'row': lambda x: x in range(35, 282+1) or x in range(288, 964+1),
+    'seat': lambda x: x in range(35, 445+1) or x in range(469, 954+1),
+    'train': lambda x: x in range(45, 294+1) or x in range(317, 968+1),
+    'type': lambda x: x in range(44, 240+1) or x in range(265, 960+1),
+    'wagon': lambda x: x in range(32, 816+1) or x in range(825, 971+1),
+    'zone': lambda x: x in range(30, 629+1) or x in range(637, 968+1),
+}
+
+
+rules_test = {
+    'class': lambda x: x in range(1, 3+1) or x in range(5, 7+1),
+    'row': lambda x: x in range(6, 11+1) or x in range(33, 44+1),
+    'seat': lambda x: x in range(13, 40+1) or x in range(45, 50+1),
+}
+
+
+rules_test2 = {
+    'class': lambda x: x in range(0, 1+1) or x in range(4, 19+1),
+    'row': lambda x: x in range(0, 5+1) or x in range(8, 19+1),
+    'seat': lambda x: x in range(0, 13+1) or x in range(16, 19+1),
+}
+
+rules = rules_test2
+
+valid_tickets = []
+
+invalids = []
+for tidx, t in enumerate(tickets):
+    log.warning('[%r] t=%r', tidx, t)
+
+    vals_used = set()
+    ok = True
+    for col in t:
+        col_ok = False
+        for valname, val in rules.items():
+            # if valname in vals_used:
+            #    continue
+            if val(col):
+                log.info('col=%r valname=%r success', col, valname)
+                col_ok = True
+                vals_used.add(valname)
+                break
+
+        if not col_ok:
+            log.debug('invalid col=%r', col)
+
+            invalids.append(col)
+            ok = False
+            # break
+
+    if ok:
+        valid_tickets.append(t)
+
+
